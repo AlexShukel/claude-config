@@ -1,0 +1,18 @@
+# Whitelist strategy: ignore everything, then re-include only sync-safe config.
+# This makes it impossible to accidentally commit credentials, transcripts, or caches.
+/*
+
+# --- Re-include shareable config ---
+!.gitignore
+!settings.json
+!statusline.sh
+!keybindings.json
+!CLAUDE.md
+!commands/
+!agents/
+!skills/
+!hooks/
+
+# --- Never sync (machine-specific / secret), even if a rule above would catch them ---
+settings.local.json
+.credentials.json
