@@ -12,7 +12,7 @@ fi
 # --- Extract flat fields from the JSON via node (tab-separated) ---
 # Also reads ~/.claude.json for the cached usage-limit windows (5h + weekly)
 # and pre-formats a compact usage string + severity, so bash only colorizes.
-IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV < <(
+IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
   printf '%s' "$input" | node -e '
     const fs=require("fs"),path=require("path");
     let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
@@ -22,6 +22,7 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV < <(
       const c   = (j.cost&&j.cost.total_cost_usd)||0;
       const la  = (j.cost&&j.cost.total_lines_added)||0;
       const ld  = (j.cost&&j.cost.total_lines_removed)||0;
+      const eff = (j.effort&&j.effort.level)||"";  // live session effort (if model supports it)
 
       // --- usage limits from ~/.claude.json ---
       let usage="", sev="ok";
@@ -59,7 +60,7 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV < <(
         }
       } catch(e){}
 
-      process.stdout.write([m,dir,c,la,ld,usage,sev].join("\t"));
+      process.stdout.write([m,dir,c,la,ld,usage,sev,eff].join("\t"));
     });
   ' 2>/dev/null
 )
@@ -125,9 +126,13 @@ if [ -n "$USAGE" ]; then
   USE_SEG="${SEP}${uc}${USAGE}${RESET}"
 fi
 
+# --- Model (+ live effort level) ---
+MODEL_SEG="${C_MODEL} ${MODEL}${RESET}"
+[ -n "$EFFORT" ] && MODEL_SEG="${MODEL_SEG}${DIM} ⚡${EFFORT}${RESET}"
+
 # --- Emit ---
 printf '%b%b%b%b%b%b\n' \
-  "${C_MODEL} ${MODEL}${RESET}" \
+  "${MODEL_SEG}" \
   "${SEP}${C_DIR} ${DIRNAME}${RESET}" \
   "${GIT_SEG}" \
   "${NODE_SEG}" \
