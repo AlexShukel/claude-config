@@ -1,18 +1,23 @@
 {
-  "model": "opus[1m]",
+  "permissions": {
+    "defaultMode": "bypassPermissions"
+  },
+  "model": "claude-fable-5[1m]",
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/statusline.sh"
+    "command": "~/.claude/statusline.sh"
   },
-  "enabledPlugins": {
-    "rust-analyzer-lsp@claude-plugins-official": true
+  "enabledPlugins": {},
+  "extraKnownMarketplaces": {
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
   },
   "effortLevel": "high",
   "tui": "fullscreen",
-  "theme": "dark",
-  "agentPushNotifEnabled": true,
   "skipDangerousModePermissionPrompt": true,
-  "permissions": {
-    "defaultMode": "bypassPermissions"
-  }
+  "theme": "dark"
 }
