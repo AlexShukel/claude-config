@@ -10,8 +10,10 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 # --- Extract flat fields from the JSON via node (tab-separated) ---
-# Also reads ~/.claude.json for the cached usage-limit windows (5h + weekly)
-# and pre-formats a compact usage string + severity, so bash only colorizes.
+# Usage-limit windows (5h + weekly) come from the LIVE `rate_limits` field on stdin,
+# which Claude Code refreshes from the rate-limit headers of every API response.
+# ~/.claude.json is only a launch-time snapshot, used until the first response lands.
+# Pre-formats a compact usage string + severity, so bash only colorizes.
 IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
   printf '%s' "$input" | node -e '
     const fs=require("fs"),path=require("path");
@@ -24,38 +26,58 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
       const ld  = (j.cost&&j.cost.total_lines_removed)||0;
       const eff = (j.effort&&j.effort.level)||"";  // live session effort (if model supports it)
 
-      // --- usage limits from ~/.claude.json ---
+      // --- usage limits: live from stdin, disk snapshot only as a fallback ---
       let usage="", sev="ok";
       try {
-        const home=process.env.HOME||require("os").homedir();
-        const cfg=JSON.parse(fs.readFileSync(path.join(home,".claude.json"),"utf8"));
-        const store=cfg.cachedUsageUtilization||{};
-        const u=store.utilization||{};
         const now=Date.now();
-        const left=(iso)=>{
-          if(!iso) return "";
-          const ms=Date.parse(iso)-now;
+        // resets_at is unix epoch SECONDS when live, an ISO string in the disk cache.
+        const left=(v)=>{
+          let target;
+          if(typeof v==="number") target=v*1000;
+          else if(typeof v==="string") target=Date.parse(v);
+          else return "";
+          const ms=target-now;
           if(!(ms>0)) return "now";
           const min=Math.floor(ms/60000), h=Math.floor(min/60), dd=Math.floor(h/24);
           if(dd>0) return dd+"d"+(h%24)+"h";
           if(h>0)  return h+"h"+(min%60)+"m";
           return min+"m";
         };
+
+        let fh=null, sd=null, cached=false, age=0;
+        const rl=j.rate_limits;
+        if(rl&&(rl.five_hour||rl.seven_day)){
+          // Live: updated on every API response, so this tracks the session in real time.
+          if(rl.five_hour) fh={pct:rl.five_hour.used_percentage, at:rl.five_hour.resets_at};
+          if(rl.seven_day) sd={pct:rl.seven_day.used_percentage, at:rl.seven_day.resets_at};
+        } else {
+          // No response yet this session (e.g. right after launch). Claude Code only
+          // rewrites this snapshot on an explicit usage fetch, throttled to 5 min, so
+          // it can lag badly — show it, but mark it as not-live.
+          const home=process.env.HOME||require("os").homedir();
+          const cfg=JSON.parse(fs.readFileSync(path.join(home,".claude.json"),"utf8"));
+          const store=cfg.cachedUsageUtilization||{};
+          const u=store.utilization||{};
+          if(u.five_hour&&typeof u.five_hour.utilization==="number") fh={pct:u.five_hour.utilization, at:u.five_hour.resets_at};
+          if(u.seven_day&&typeof u.seven_day.utilization==="number") sd={pct:u.seven_day.utilization, at:u.seven_day.resets_at};
+          if(fh||sd){
+            cached=true;
+            if(typeof store.fetchedAtMs==="number") age=now-store.fetchedAtMs;
+          }
+        }
+
         const seg=(w)=>{
-          if(!w||w.utilization==null) return null;
-          const pct=Math.floor(w.utilization);
-          const l=left(w.resets_at);
-          return {pct, s:pct+"% ↻"+l};
+          if(!w||typeof w.pct!=="number") return null;
+          const pct=Math.floor(w.pct);
+          return {pct, s:pct+"% ↻"+left(w.at)};
         };
-        const parts=[], fh=seg(u.five_hour), sd=seg(u.seven_day);
+        const parts=[], a=seg(fh), b=seg(sd);
         let maxp=0;
-        if(fh){parts.push("5h "+fh.s); maxp=Math.max(maxp,fh.pct);}
-        if(sd){parts.push("wk "+sd.s); maxp=Math.max(maxp,sd.pct);}
+        if(a){parts.push("5h "+a.s); maxp=Math.max(maxp,a.pct);}
+        if(b){parts.push("wk "+b.s); maxp=Math.max(maxp,b.pct);}
         if(parts.length){
-          // staleness: mark if cache older than 1h
-          const age=store.fetchedAtMs? now-store.fetchedAtMs : 0;
-          if(age>3600000) parts.push("(stale)");
-          usage=parts.join("  ");
+          usage=(cached?"~":"")+parts.join("  ");
+          if(cached&&age>3600000) usage+=" (stale)";
           sev = maxp>=90?"crit":maxp>=75?"warn":"ok";
         }
       } catch(e){}
