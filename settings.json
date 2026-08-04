@@ -10,6 +10,14 @@
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true
   },
+  "extraKnownMarketplaces": {
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
+  },
   "effortLevel": "high",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
