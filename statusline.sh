@@ -10,11 +10,11 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 
 # --- Extract flat fields from the JSON via node (tab-separated) ---
-# Also reads ~/.claude.json for the cached usage-limit windows (5h + weekly)
-# and pre-formats a compact usage string + severity, so bash only colorizes.
-IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
+# Reads the usage-limit windows (5h + weekly) from the `rate_limits` field
+# that Claude Code passes on stdin (Pro/Max only), and pre-formats a compact
+# usage string + severity, so bash only colorizes.
+IFS=$'\x1f' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
   printf '%s' "$input" | node -e '
-    const fs=require("fs"),path=require("path");
     let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
       let j={};try{j=JSON.parse(d)}catch(e){}
       const m   = (j.model&&j.model.display_name)||"?";
@@ -24,17 +24,15 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
       const ld  = (j.cost&&j.cost.total_lines_removed)||0;
       const eff = (j.effort&&j.effort.level)||"";  // live session effort (if model supports it)
 
-      // --- usage limits from ~/.claude.json ---
+      // --- usage limits from the `rate_limits` field on stdin (Pro/Max) ---
+      // resets_at is Unix epoch SECONDS; used_percentage is 0-100.
       let usage="", sev="ok";
       try {
-        const home=process.env.HOME||require("os").homedir();
-        const cfg=JSON.parse(fs.readFileSync(path.join(home,".claude.json"),"utf8"));
-        const store=cfg.cachedUsageUtilization||{};
-        const u=store.utilization||{};
+        const u=j.rate_limits||{};
         const now=Date.now();
-        const left=(iso)=>{
-          if(!iso) return "";
-          const ms=Date.parse(iso)-now;
+        const left=(sec)=>{
+          if(!sec) return "";
+          const ms=sec*1000-now;
           if(!(ms>0)) return "now";
           const min=Math.floor(ms/60000), h=Math.floor(min/60), dd=Math.floor(h/24);
           if(dd>0) return dd+"d"+(h%24)+"h";
@@ -42,8 +40,8 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
           return min+"m";
         };
         const seg=(w)=>{
-          if(!w||w.utilization==null) return null;
-          const pct=Math.floor(w.utilization);
+          if(!w||w.used_percentage==null) return null;
+          const pct=Math.floor(w.used_percentage);
           const l=left(w.resets_at);
           return {pct, s:pct+"% ↻"+l};
         };
@@ -52,15 +50,12 @@ IFS=$'\t' read -r MODEL CURDIR COST LADD LDEL USAGE USAGE_SEV EFFORT < <(
         if(fh){parts.push("5h "+fh.s); maxp=Math.max(maxp,fh.pct);}
         if(sd){parts.push("wk "+sd.s); maxp=Math.max(maxp,sd.pct);}
         if(parts.length){
-          // staleness: mark if cache older than 1h
-          const age=store.fetchedAtMs? now-store.fetchedAtMs : 0;
-          if(age>3600000) parts.push("(stale)");
           usage=parts.join("  ");
           sev = maxp>=90?"crit":maxp>=75?"warn":"ok";
         }
       } catch(e){}
 
-      process.stdout.write([m,dir,c,la,ld,usage,sev,eff].join("\t"));
+      process.stdout.write([m,dir,c,la,ld,usage,sev,eff].join("\x1f"));
     });
   ' 2>/dev/null
 )
