@@ -4,6 +4,7 @@
 
 # --- Re-include shareable config ---
 !.gitignore
+!.gitattributes
 !settings.json
 !statusline.sh
 !keybindings.json

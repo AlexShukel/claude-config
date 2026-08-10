@@ -1,0 +1,4 @@
+# Force LF in the repo so the shell scripts work on macOS and Linux.
+# Git Bash on Windows reads LF fine, so this costs nothing there.
+* text=auto eol=lf
+*.sh text eol=lf
