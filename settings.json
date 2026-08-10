@@ -18,6 +18,21 @@
       }
     }
   },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/daily-config-pull.sh",
+            "async": true,
+            "timeout": 60,
+            "statusMessage": "Syncing Claude config..."
+          }
+        ]
+      }
+    ]
+  },
   "effortLevel": "high",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
