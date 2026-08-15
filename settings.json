@@ -5,7 +5,8 @@
   "model": "claude-fable-5[1m]",
   "statusLine": {
     "type": "command",
-    "command": "bash ~/.claude/statusline.sh"
+    "command": "bash ~/.claude/statusline.sh",
+    "padding": 0
   },
   "enabledPlugins": {
     "rust-analyzer-lsp@claude-plugins-official": true
@@ -15,6 +16,12 @@
       "source": {
         "source": "github",
         "repo": "anthropics/skills"
+      }
+    },
+    "cloudflare": {
+      "source": {
+        "source": "github",
+        "repo": "cloudflare/skills"
       }
     }
   },
@@ -28,6 +35,42 @@
             "async": true,
             "timeout": 60,
             "statusMessage": "Syncing Claude config..."
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$HOME/Git/halo/scripts/notify-telegram.sh\" ] && jq -r '\"⏳ Claude [\" + ((.cwd // \"?\") | split(\"/\") | last) + \"] \" + (.message // \"needs attention\")' | \"$HOME/Git/halo/scripts/notify-telegram.sh\" || true",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$HOME/Git/halo/scripts/notify-telegram.sh\" ] && jq -r '\"❌ Claude [\" + ((.cwd // \"?\") | split(\"/\") | last) + \"] turn failed: \" + (.error // .message // \"API error\")' | \"$HOME/Git/halo/scripts/notify-telegram.sh\" || true",
+            "timeout": 30,
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ -x \"$HOME/Git/halo/scripts/notify-telegram.sh\" ] && jq -r '\"🏁 Claude [\" + ((.cwd // \"?\") | split(\"/\") | last) + \"] session ended\" + ((.reason // \"\") | if . == \"\" then \"\" else \" — \" + . end)' | \"$HOME/Git/halo/scripts/notify-telegram.sh\" || true",
+            "timeout": 30,
+            "async": true
           }
         ]
       }
